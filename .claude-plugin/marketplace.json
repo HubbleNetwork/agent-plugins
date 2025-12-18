@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "hubble-cloud-api",
-      "source": "github:HubbleNetwork/agent-plugins/hubble-cloud-api-skill",
+      "source": "./hubble-cloud-api-skill",
       "description": "Complete Claude Skill for Hubble Network Cloud API integration with devices, packets, webhooks, and metrics"
     }
   ]
