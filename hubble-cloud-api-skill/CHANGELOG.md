@@ -5,6 +5,71 @@ All notable changes to the Hubble Cloud API Claude Skill will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-15
+
+### Added
+
+#### Packet Structure Documentation
+- **Comprehensive nested structure documentation** in SKILL.md
+  - Detailed breakdown of `packet.device` and `packet.location` objects
+  - Field-by-field mapping with correct access patterns
+  - Common mistakes section highlighting incorrect field access patterns
+  - Helper function example for extracting packet information
+
+#### Real-World Examples
+- **Example 6: Real-Time Packet Monitoring with Deduplication** (Python)
+  - Complete monitoring class with proper packet structure handling
+  - Initial load pattern (marks existing packets as seen without processing)
+  - Packet deduplication using device ID + timestamp + sequence number
+  - Real-time polling with configurable intervals
+  - Graceful shutdown and statistics
+
+- **Example 7: Extract and Visualize Packet Data** (JavaScript/Node.js)
+  - Demonstrates correct nested structure access
+  - Helper functions for device info extraction
+  - Unix timestamp to JavaScript Date conversion
+  - Packet grouping and aggregation by device
+  - RSSI averaging calculations
+
+### Changed
+
+#### SKILL.md
+- Added "Packet Structure" subsection under "Packet Retrieval"
+- Documented actual API response format with nested objects
+- Added visual JSON structure example with inline comments
+- Included "Important Field Locations" reference table
+- Added "Common Mistakes" section with ❌/✅ indicators
+
+#### EXAMPLES.md
+- **Fixed Example 4**: Updated to use correct nested packet structure
+  - Changed `packet['device_id']` to `packet['device']['id']`
+  - Changed `packet['payload']` to `packet['device']['payload']`
+  - Added device name extraction from `packet['device']['name']`
+
+### Technical Improvements
+
+#### Packet Field Mappings Documented
+- Device ID: `packet.device.id` (UUID format)
+- Device Name: `packet.device.name`
+- RSSI: `packet.device.rssi` (not at top level)
+- Sequence Number: `packet.device.sequence_number`
+- GPS Coordinates: `packet.location.latitude/longitude`
+- Timestamp: `packet.location.timestamp` (Unix epoch seconds)
+- Network Type: `packet.network_type` (top-level)
+
+#### Real-World Patterns
+- Initial fetch pattern (load existing without processing)
+- Continuous polling with deduplication
+- Packet ID generation for uniqueness
+- Nested field extraction helpers
+- Location timestamp conversion (Unix to ISO/Date)
+
+### Notes
+- Based on production experience building real-time packet visualization application
+- All examples tested against live Hubble API
+- Addresses common developer confusion about field locations
+- Reduces time-to-first-packet for new integrators
+
 ## [1.0.0] - 2024-01-21
 
 ### Added

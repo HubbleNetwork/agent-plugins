@@ -193,6 +193,68 @@ The Hubble Cloud API provides 40+ endpoints organized into 9 categories. For com
 
 **Pagination**: Uses `Continuation-Token` header for streaming large datasets
 
+#### Packet Structure
+
+The API returns packets with a **nested structure**. Understanding this structure is critical for extracting device information and metadata:
+
+```json
+{
+  "location": {
+    "timestamp": 1765598212.181298,    // Unix timestamp (seconds)
+    "latitude": 47.61421,
+    "longitude": -122.31929,
+    "altitude": 829,
+    "horizontal_accuracy": 29,
+    "vertical_accuracy": 29
+  },
+  "device": {
+    "id": "bc17a947-7a4f-4cff-9127-340cc4005272",  // Device UUID
+    "name": "Device Display Name",
+    "tags": ["tag1", "tag2"],
+    "payload": "SGVsbG8gV29ybGQ=",    // Base64-encoded
+    "timestamp": "2025-01-15T10:30:45Z",
+    "rssi": -85,                        // Signal strength (dBm)
+    "sequence_number": 42,
+    "counter": 123
+  },
+  "network_type": "bluetooth"
+}
+```
+
+**Important Field Locations**:
+- **Device ID**: `packet.device.id` (UUID format)
+- **Device Name**: `packet.device.name`
+- **RSSI**: `packet.device.rssi` (not at top level)
+- **Sequence Number**: `packet.device.sequence_number`
+- **GPS Location**: `packet.location.latitude` and `packet.location.longitude`
+- **Timestamp**: `packet.location.timestamp` (Unix epoch in seconds)
+
+**Common Mistakes**:
+- ❌ `packet.device_id` - Does not exist
+- ❌ `packet.dev_eui` - Does not exist at top level
+- ❌ `packet.rssi` - Does not exist at top level
+- ✅ `packet.device.id` - Correct way to get device ID
+- ✅ `packet.device.rssi` - Correct way to get signal strength
+
+**Helper Function Example**:
+```javascript
+function extractPacketInfo(packet) {
+  return {
+    deviceId: packet.device.id,
+    deviceName: packet.device.name,
+    rssi: packet.device.rssi,
+    sequence: packet.device.sequence_number,
+    location: {
+      lat: packet.location?.latitude,
+      lng: packet.location?.longitude,
+      timestamp: packet.location?.timestamp ?
+        new Date(packet.location.timestamp * 1000) : null
+    },
+    payload: packet.device.payload
+  };
+}
+```
+
 ### Webhook Management
 
 - `POST /api/org/{org_id}/webhooks` - Register webhook endpoint

@@ -371,16 +371,21 @@ def stream_packets(start_time, end_time, device_id=None, callback=None):
 def process_packet_batch(packets):
     """Process a batch of packets"""
     for packet in packets:
+        # Extract info from nested structure
+        device_id = packet['device']['id']
+        device_name = packet['device'].get('name', 'Unknown')
+        payload_b64 = packet['device']['payload']
+
         # Decode Base64 payload
         try:
-            payload = base64.b64decode(packet['payload'])
-            print(f"    Device {packet['device_id']}: {len(payload)} bytes")
+            payload = base64.b64decode(payload_b64)
+            print(f"    Device {device_name} ({device_id[:8]}...): {len(payload)} bytes")
 
             # Your processing logic here
             # e.g., parse payload, save to database, trigger alerts
 
         except Exception as e:
-            print(f"    ✗ Error processing packet {packet['packet_id']}: {e}")
+            print(f"    ✗ Error processing packet: {e}")
 
 # Example usage
 if __name__ == "__main__":
@@ -498,6 +503,233 @@ if __name__ == "__main__":
               f"(avg: {sum(temps)/len(temps):.1f}°C)")
         print(f"  Humidity: {min(humidities):.1f}% to {max(humidities):.1f}% "
               f"(avg: {sum(humidities)/len(humidities):.1f}%)")
+```
+
+### Example 6: Real-Time Packet Monitoring with Deduplication
+
+```python
+#!/usr/bin/env python3
+"""
+Real-time packet monitoring with proper deduplication.
+Demonstrates the correct packet structure and initial load pattern.
+"""
+
+import requests
+import time
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+API_TOKEN = os.getenv('HUBBLE_API_TOKEN')
+ORG_ID = os.getenv('HUBBLE_ORG_ID')
+BASE_URL = "https://api.hubble.com"
+
+class PacketMonitor:
+    def __init__(self, org_id, api_token):
+        self.org_id = org_id
+        self.api_token = api_token
+        self.seen_packets = set()
+        self.is_initial_load = True
+
+    def get_packet_id(self, packet):
+        """Generate unique ID for packet deduplication"""
+        device_id = packet['device']['id']
+        timestamp = packet['location']['timestamp']
+        sequence = packet['device']['sequence_number']
+        return f"{device_id}_{timestamp}_{sequence}"
+
+    def extract_packet_info(self, packet):
+        """Extract info from nested packet structure"""
+        return {
+            'device_id': packet['device']['id'],
+            'device_name': packet['device'].get('name', 'Unknown'),
+            'rssi': packet['device'].get('rssi'),
+            'sequence': packet['device'].get('sequence_number'),
+            'payload': packet['device'].get('payload'),
+            'latitude': packet['location'].get('latitude'),
+            'longitude': packet['location'].get('longitude'),
+            'timestamp': datetime.fromtimestamp(
+                packet['location']['timestamp']
+            ) if packet.get('location', {}).get('timestamp') else None
+        }
+
+    def fetch_packets(self):
+        """Fetch packets from API"""
+        # Query last minute for real-time monitoring
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(minutes=1)
+
+        url = f"{BASE_URL}/api/org/{self.org_id}/packets"
+        headers = {"Authorization": f"Bearer {self.api_token}"}
+        params = {
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat()
+        }
+
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+
+        return response.json().get('packets', [])
+
+    def process_packets(self, packets):
+        """Process packets with deduplication"""
+        # Filter for new packets only
+        new_packets = []
+        for packet in packets:
+            packet_id = self.get_packet_id(packet)
+            if packet_id not in self.seen_packets:
+                self.seen_packets.add(packet_id)
+                new_packets.append(packet)
+
+        # On initial load, just mark as seen without processing
+        if self.is_initial_load:
+            print(f"🔄 Initial load: Marked {len(new_packets)} existing packets as seen")
+            print("🎆 Ready! Monitoring for new packets...\n")
+            self.is_initial_load = False
+            return
+
+        # Process new packets
+        for packet in new_packets:
+            info = self.extract_packet_info(packet)
+            print(f"📦 New packet from {info['device_name']} ({info['device_id'][:8]}...)")
+            print(f"   Sequence: {info['sequence']}, RSSI: {info['rssi']} dBm")
+            if info['latitude'] and info['longitude']:
+                print(f"   Location: ({info['latitude']:.5f}, {info['longitude']:.5f})")
+            print(f"   Time: {info['timestamp']}")
+            print()
+
+    def start_monitoring(self, interval=3):
+        """Start real-time monitoring loop"""
+        print("Starting Hubble packet monitor...")
+        print(f"Organization: {self.org_id}")
+        print(f"Poll interval: {interval} seconds\n")
+
+        try:
+            while True:
+                try:
+                    packets = self.fetch_packets()
+                    self.process_packets(packets)
+                except requests.exceptions.RequestException as e:
+                    print(f"❌ API Error: {e}")
+
+                time.sleep(interval)
+
+        except KeyboardInterrupt:
+            print("\n\n⏹️  Monitoring stopped")
+            print(f"Total packets seen: {len(self.seen_packets)}")
+
+# Example usage
+if __name__ == "__main__":
+    monitor = PacketMonitor(ORG_ID, API_TOKEN)
+    monitor.start_monitoring(interval=3)  # Poll every 3 seconds
+```
+
+**Key Features**:
+- ✅ Correct nested packet structure (`packet.device.id`, `packet.device.rssi`)
+- ✅ Initial load pattern (marks existing packets as seen without processing)
+- ✅ Deduplication using device ID + timestamp + sequence number
+- ✅ Real-time monitoring with configurable poll interval
+- ✅ Proper error handling and graceful shutdown
+
+### Example 7: Extract and Visualize Packet Data
+
+```javascript
+// JavaScript/Node.js example showing packet structure
+const axios = require('axios');
+
+const API_TOKEN = process.env.HUBBLE_API_TOKEN;
+const ORG_ID = process.env.HUBBLE_ORG_ID;
+const BASE_URL = 'https://api.hubble.com';
+
+/**
+ * Extract device information from packet
+ * Note: Device info is nested inside packet.device object
+ */
+function extractDeviceInfo(packet) {
+  return {
+    // Device fields are in packet.device
+    id: packet.device.id,
+    name: packet.device.name,
+    rssi: packet.device.rssi,
+    sequence: packet.device.sequence_number,
+    payload: packet.device.payload,
+
+    // Location fields are in packet.location
+    location: packet.location ? {
+      lat: packet.location.latitude,
+      lng: packet.location.longitude,
+      altitude: packet.location.altitude,
+      timestamp: new Date(packet.location.timestamp * 1000) // Convert Unix to JS Date
+    } : null,
+
+    // Top-level field
+    networkType: packet.network_type
+  };
+}
+
+/**
+ * Fetch recent packets with proper structure handling
+ */
+async function fetchRecentPackets(minutes = 60) {
+  const endTime = new Date();
+  const startTime = new Date(endTime.getTime() - minutes * 60 * 1000);
+
+  const response = await axios.get(
+    `${BASE_URL}/api/org/${ORG_ID}/packets`,
+    {
+      headers: { 'Authorization': `Bearer ${API_TOKEN}` },
+      params: {
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString()
+      }
+    }
+  );
+
+  return response.data.packets.map(extractDeviceInfo);
+}
+
+/**
+ * Group packets by device
+ */
+function groupByDevice(packets) {
+  const grouped = {};
+
+  for (const packet of packets) {
+    if (!grouped[packet.id]) {
+      grouped[packet.id] = {
+        device_id: packet.id,
+        device_name: packet.name,
+        packets: []
+      };
+    }
+    grouped[packet.id].packets.push(packet);
+  }
+
+  return Object.values(grouped);
+}
+
+// Example usage
+async function main() {
+  console.log('Fetching packets from last hour...\n');
+
+  const packets = await fetchRecentPackets(60);
+  console.log(`Found ${packets.length} packets\n`);
+
+  const byDevice = groupByDevice(packets);
+
+  for (const device of byDevice) {
+    console.log(`Device: ${device.device_name} (${device.device_id.substring(0, 8)}...)`);
+    console.log(`  Packets: ${device.packets.length}`);
+    console.log(`  Avg RSSI: ${
+      (device.packets.reduce((sum, p) => sum + p.rssi, 0) / device.packets.length).toFixed(1)
+    } dBm`);
+    console.log();
+  }
+}
+
+main().catch(console.error);
 ```
 
 ---
