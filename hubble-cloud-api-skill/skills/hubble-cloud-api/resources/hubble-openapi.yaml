@@ -1,0 +1,2321 @@
+openapi: 3.0.0
+info:
+  title: Hubble Platform API
+  description: |
+    The Hubble Cloud API offers a variety of endpoints for managing API keys and webhooks, registering devices with Hubble, retrieving data packets, accessing platform metrics and billing data, and more. 
+    Each endpoint returns standard HTTP status codes and may include JSON payloads.
+
+    ---
+    
+    ## API Access
+    Use API Keys to authenticate with the Hubble Cloud API for your organization. 
+
+    ### Generate an API Key
+    Log in to your Hubble dashboard. Navigate to **Developer > API Tokens** to create a new API Key. 
+    Provide a name for the token and set an appropriate expiration date for temporary access.
+
+    ### Organization ID
+    You will need your Organization ID to call the API. From your Hubble dashboard, navigate to 
+    **Developer > API Tokens** or **Organization Settings** to locate the Organization ID. 
+
+    ### Authorization Scopes
+    API endpoints require specific authorization scopes to perform the intended operation. 
+    **Required Scope** is always provided in the API documentation.
+    
+    API Keys can be created with specific authorization scopes that control what operations the key can perform. 
+    If no scopes are specified, the key will be created with all available scopes (admin-level access).
+   
+    | **Scope**                   | **Access**                                     |
+    |------------------------------|-------------------------------------------------|
+    | **read-api-keys**            | View API keys and their metadata               |
+    | **write-api-keys**           | Create, update, and delete API keys            |
+    | **read-users**               | View user information and roles                |
+    | **write-users**              | Add, update, and remove users from the organization |
+    | **read-organization-metadata** | View organization details and settings       |
+    | **write-organization-metadata** | Update organization information            |
+    | **read-devices**             | View device information and status             |
+    | **write-devices**            | Register and manage devices                    |
+    | **read-invitations**         | View pending invitations                       |
+    | **write-invitations**        | Create and revoke user invitations             |
+    | **read-packets**             | Access packet data and retrieval endpoints     |
+    | **read-platform-metrics**    | View platform metrics and analytics            |
+    | **read-billing-usage**       | View billing usage information                 |
+    | **read-billing-invoices**    | View billing invoices                          |
+    | **read-webhooks**            | View webhook configurations                    |
+    | **write-webhooks**           | Create and manage webhook endpoints            |
+        
+    **Example Scope Combinations**
+    - Create a key with read-only access: `["read-api-keys", "read-users", "read-devices"]`
+    - Create a key for device management: `["read-devices", "write-devices"]`
+    - Create a key for user management: `["read-users", "write-users", "read-invitations", "write-invitations"]`
+        
+    **Best Practices for Data Security**
+    - Create keys with the minimum required scopes for your use case
+    - Regularly review and rotate API keys
+    - Use descriptive names for your keys to track their purpose
+    - Set appropriate expiration dates for temporary access    
+    
+    ---
+    
+    ## Pagination
+    When the number of objects requested exceeds the maximum page size for an endpoint, the API response will be paginated. 
+    This means you will receive a subset of the total results, along with a `Continuation-Token` in the Response Header that can be used to fetch subsequent subsets.
+
+    To retrieve the next set of data, you must use the provided `Continuation-Token` in the Request Header of your next API call to the same endpoint. 
+    Continue using the provided token in each successive request until no `Continuation-Token` is returned, which indicates you have retrieved all available data.
+    
+    ---
+    
+    ## Rate Limits
+    The Hubble Cloud API follows a leaky bucket approach to rate limiting. Endpoints are rate limited to three (3) requests per second. 
+    Your organization is limited to a total of 15 requests per second. 
+    If you exceed this limit, you will receive a 429 status code. 
+    We recommend backoff retry logic to stay within the limit.
+    
+    ---
+    
+    ## Request Headers
+    All HTTP responses will include a `X-Request-ID` header that is logged internally and can be used for tracing/debugging a particular API request. 
+    All HTTP requests can include a `X-Request-ID` header which will be logged and mapped to the responses' `X-Request-ID` header. 
+    
+    Share Request Headers whenever troubleshooting an API issue with Hubble Support.
+
+    ---
+    
+    ## Status Codes
+    The Hubble Cloud API returns the following HTTP status codes: `200`, `400`, `401`, `404`, `429` and `500`. 
+    Use the tailored message returned with each status code for insight in the specific context of the endpoint you are attempting to access.
+
+    ---
+    
+    ## Versioning
+    Our cloud backend follows a rolling release model. This means:
+    - **Continuous Deployment**: New features, security updates, and performance improvements are automatically rolled out.
+    - **Backward Compatibility**: Cloud updates are designed to be compatible with devices running firmware/SDK versions within our active or maintained support windows.
+    - **Transparent Change Management**: Release notes and changelogs are published regularly so you can track enhancements and understand any adjustments that might affect integrations.
+    - **Versioned Public API**: The Cloud API will use basic major versioning in the url paths (/v1/api, /v2/api etc.). Major backwards incompatible changes will be made by creating a version of the endpoint with a higher version and communicating with customers to migrate. Previous versions will be supported for a minimum of 1 year.
+
+    ---
+
+  version: 1.0.0
+  
+servers:
+  - url: https://api.hubble.com
+    description: Production
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/org/{org_id}/check:
+    get:
+      tags:
+        - API Keys
+      operationId: validate-api-key
+      summary: Validate an API Key
+      description: Confirm your API key is valid.
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: API key validated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  org_id:
+                    $ref: '#/components/schemas/orgId'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/key:
+    post:
+      tags:
+        - API Keys
+      operationId: provision-api-key
+      summary: Provision an API Key
+      description: |
+        Provision a new API Key for your organization.
+        
+        **Required Scope:** `write-api-keys`
+        
+        ### Authorization Scopes
+        API Keys can be created with specific authorization scopes that control what operations the key can perform. 
+        If no scopes are specified, the key will be created with all available scopes (admin-level access).
+        See the Cloud API "Introduction" for a complete list authorization scopes.
+
+        ### Expiration Date
+        Set an appropriate expiration date for temporary API access. For no expiration, set to `0`.
+        
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  $ref: '#/components/schemas/apiKeyName'
+                expires_at_seconds:
+                  $ref: '#/components/schemas/apiKeyExpiration'
+                scopes:
+                  $ref: '#/components/schemas/authScope'
+                  example: ["read-api-keys", "read-users", "read-devices"]
+      responses:
+        '200':
+          description: API key provisioned
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/apiKeyItem'
+                  - type: object
+                    properties:
+                      key:
+                        $ref: '#/components/schemas/apiKey'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    get:
+      tags:
+        - API Keys
+      operationId: list-api-keys
+      summary: List all API Keys
+      description: |
+        List all valid API Keys for your organization.
+        
+        **Required Scope:** `read-api-keys`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/apiKeyItem'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/key/{key_id}:
+    delete:
+      tags:
+        - API Keys
+      operationId: delete-api-key
+      summary: Delete an API Key
+      description: |
+        Permanently delete an API Key from your organization.
+        
+        **Required Scope:** `write-api-keys`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/apiKeyId'
+          description: API key ID
+      responses:
+        '200':
+          description: API key deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key_id:
+                    $ref: '#/components/schemas/apiKeyId'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    patch:
+      tags:
+        - API Keys
+      operationId: update-api-key
+      summary: Update an API Key
+      description: |
+        Update metadata for an API key, including name, authorization scopes, and expiration time.
+        
+        **Required Scope:** `write-api-keys`
+        
+        ### Authorization Scopes
+        You may update the scopes assigned to an API key to change its permissions. See the Cloud API "Introduction" for a complete list authorization scopes.
+        
+        ### Expiration Time
+        You may update the expiration time for an API key. Set to 0 to remove expiration (key will never expire).
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - name: key_id
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/apiKeyId'
+          description: API key ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                set_name:
+                  $ref: '#/components/schemas/apiKeyName'
+                set_scopes:
+                  $ref: '#/components/schemas/authScope'
+                  example: ["read-api-keys", "read-users", "read-devices"]
+                set_expires_at_seconds:
+                  $ref: '#/components/schemas/apiKeyExpiration'
+      responses:
+        '200':
+          description: API Key Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/apiKeyItem'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/key_scopes:
+    get:
+      tags:
+        - API Keys
+      operationId: list-key-scopes
+      summary: List Key Scopes
+      description: |
+        Retrieve a list of all available authorization scopes that can be assigned to API keys.
+        This endpoint returns scope IDs and human-readable display names.
+        
+        **Required Scope:** `read-api-keys`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: List of available scopes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        scope_id:
+                          $ref: '#/components/schemas/authScope'
+                          description: The scope identifier used in API requests
+                        display_name:
+                          type: string
+                          description: Human-readable name for the scope
+                      required:
+                        - scope_id
+                        - display_name
+                    description: List of all available authorization scopes
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}:
+    patch:
+      tags:
+        - Organizations
+      operationId: update-organization-metadata
+      summary: Update Organization Metadata
+      description: |
+        Update metadata for an organization.
+        
+        **Required Scope:** `write-organization-metadata`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: |
+                All of the potential update operations. 
+                Each field is optional but the request must have at least one field set to perform an update.
+              properties:
+                set_name:
+                  $ref: '#/components/schemas/organizationName'
+                set_address:
+                  $ref: '#/components/schemas/address'
+                set_contact_info:
+                  $ref: '#/components/schemas/contactInfo'
+                set_timezone:
+                  $ref: '#/components/schemas/timezone'
+
+      responses:
+        '200':
+          description: "Updated Organization"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organization'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    get:
+      tags:
+        - Organizations
+      operationId: retrieve-organization-metadata
+      summary: Retrieve Organization Metadata
+      description: |
+        Retrieve metadata for an organization.
+        
+        **Required Scope:** `read-organization-metadata`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: "An Organization"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organization'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/v2/org/{org_id}/devices:
+    post:
+      tags:
+        - Devices
+      operationId: register-new-devices
+      summary: Register New Devices
+      description: |
+        Register one or more devices to your organization.
+        This endpoint supports provisioning multiple devices at once and allows specification of encryption type.
+        
+        You can optionally provide `names` and `tags` for each device being provisioned:
+        * `names`: An array of device names.
+        * `tags`: An array of device tags.
+        
+        **Required Scope:** `write-devices`
+
+        ### Response Body
+        * `device.key` is encoded in Base64 format, and automatically compatible with the Hubble Device SDK.
+
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ encryption ]
+              properties:
+                n_devices:
+                  type: integer
+                  minimum: 1
+                  maximum: 1000
+                  default: 1
+                  description: Number of devices to provision
+                encryption:
+                  type: string
+                  enum: [ AES-256-CTR, AES-128-CTR, NONE ]
+                  description: Encryption type to use for the devices
+                names:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/deviceName'
+                  description: |
+                    Optional array of device names. 
+                    If provided, the length must match the number of devices being provisioned.
+                tags:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/deviceTags'
+                  description: | 
+                    Optional array of tag maps for each device. 
+                    If provided, the length must match the number of devices being provisioned.
+      responses:
+        '200':
+          description: Devices provisioned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        device_id:
+                          $ref: '#/components/schemas/deviceId'
+                        name:
+                          $ref: '#/components/schemas/deviceName'
+                        created_ts:
+                          type: integer
+                          format: int64
+                          description: Unix timestamp (in seconds) when the device was created
+                        tags:
+                          $ref: '#/components/schemas/deviceTags'
+                        protocol:
+                          type: object
+                          description: Protocol configuration for the device
+                          properties:
+                            terrestrial:
+                              type: object
+                              properties:
+                                version:
+                                  type: integer
+                                  format: uint8
+                                  description: Protocol version number
+                        network_id:
+                          type: integer
+                          description: Network ID for the device, if applicable
+                        key:
+                          type: string
+                          format: byte
+                          description: Encryption key for the device in Base64 format, if applicable.
+              examples:
+                encryptedProtocol:
+                  value:
+                    devices:
+                      - device_id: "6ea53e36-b7fb-429f-8c2e-d536cab71089"
+                        protocol:
+                          terrestrial:
+                            version: 0
+                        key: "YWJjZGVmZw=="
+
+                unencryptedProtocol:
+                  value:
+                    devices:
+                      - device_id: "6ea53e36-b7fb-429f-8c2e-d536cab71089"
+                        protocol:
+                          terrestrial:
+                            version: 1
+                        network_id: 1234567
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/devices:
+    get:
+      tags:
+        - Devices
+      operationId: list-devices
+      summary: List Devices
+      description: |
+        Returns pages of registered devices for your organization depending on the provided filters.
+
+        **Required Scope:** `read-devices`
+        
+        ## Timestamp Filters
+        Timestamp filters can be used to trim down the search results.
+        For simpliticy, we currently only support the `between:after_timestamp:before_timestamp` operator.
+        The after_timestamp value is inclusive and the before_timestamp value is exclusive.
+        
+        Some example filters you might be interested in:
+        - Unused devices: `filter_most_recent_packet_ts=between:0:1`
+        - Recently Active Devices: `filter_most_recent_packet_ts=between:{timestamp_one_day_ago}:{timestamp_now}`
+        - Inactive Devices: `filter_most_recent_packet_ts=between:1:{timestamp_one_week_ago}`
+        - Recently Registered Devices: `filter_created_ts=between:{timestamp_one_day_ago}:{timestamp_now}`
+        
+        ## Total Devices Count
+        The first page of results includes a `total_devices` field indicating the total number of devices 
+        matching the query criteria. This field is not included in subsequent pages.
+        
+        ## Most Recent Packet
+        - *Periodically Updated*
+        The recent packet information returned in this endpoint leverages periodically updated packet data. 
+        It is not updated in real-time or atomically with packet data.
+        The most recent packets for an organization are available from the Packet Retrieval endpoint.
+
+        - *Sorting Caveats*
+        While sorting on most recent packet is supported, it is not recommended to actually page all devices in this way.
+        This is mostly provided to quickly see the oldest inactive device or the newest active device in an organization.
+        If sort_ascending is true, the pagination may return duplicate values since a device with a new most_recent_packet could be returned in subsequent pages.
+        If sort_ascending is false, the pagination may skip devices that receive new most_recent_packet data during the pagination.
+        Finally, when sorting by most recent packet, the results will not include devices that have received no packets.
+        
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/limitQueryParam'
+        - $ref: '#/components/parameters/filterTagsQueryParam'
+        - $ref: '#/components/parameters/filterCreatedTSQueryParam'
+        - $ref: '#/components/parameters/filterMostRecentPacketTSQueryParam'
+        - $ref: '#/components/parameters/sortFieldQueryParam'
+        - $ref: '#/components/parameters/sortAscendingQueryParam'
+        - $ref: '#/components/parameters/continuationTokenHeader'
+      responses:
+        '200':
+          description: Device Pages
+          headers:
+            Continuation-Token:
+              $ref: '#/components/parameters/continuationTokenHeader'
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/organizationDevice'
+                  total_devices:
+                    type: integer
+                    description: |
+                      Total number of devices matching the query criteria.
+                      This field is only present on the first page of results.
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    patch:
+      tags:
+        - Devices
+      operationId: batch-update-devices
+      summary: Batch Update Devices
+      description: |
+        Update multiple registered devices belonging to your organization in a single request.
+        
+        **Required Scope:** `write-devices`
+        
+        ## Limitations
+        - A maximum of 1000 devices can be updated in a single request.
+        - Each update item must include a `device_id` and at least one update field.
+        - In the event of an internal error, some updates may be applied and others may not. Each update is idempotent and the whole request can be retried again to ensure a consistent update across the batch.
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - updates
+              properties:
+                updates:
+                  type: array
+                  minItems: 1
+                  maxItems: 1000
+                  description: Array of device update operations
+                  items:
+                    type: object
+                    required:
+                      - device_id
+                    properties:
+                      device_id:
+                        $ref: '#/components/schemas/deviceId'
+                      set_name:
+                        $ref: '#/components/schemas/deviceName'
+                        description: Set the device name
+                      set_tags:
+                        $ref: '#/components/schemas/deviceTags'
+                        description: Set the device tags
+            examples:
+              updateNames:
+                value:
+                  updates:
+                    - device_id: "6ea53e36-b7fb-429f-8c2e-d536cab71089"
+                      set_name: "Device 1"
+                    - device_id: "7fb64f47-c8gc-530g-9d3f-e647dbc8219a"
+                      set_name: "Device 2"
+              updateTags:
+                value:
+                  updates:
+                    - device_id: "6ea53e36-b7fb-429f-8c2e-d536cab71089"
+                      set_tags:
+                        location: "warehouse-a"
+                    - device_id: "7fb64f47-c8gc-530g-9d3f-e647dbc8219a"
+                      set_tags:
+                        location: "warehouse-b"
+      responses:
+        '200':
+          description: Updated Devices
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - devices
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/organizationDevice'
+              examples:
+                success:
+                  value:
+                    devices:
+                      - id: "6ea53e36-b7fb-429f-8c2e-d536cab71089"
+                        name: "Device 1"
+                        created_ts: 1609459200
+                        tags:
+                          location: "warehouse-a"
+                        most_recent_packet: {}
+                      - id: "7fb64f47-c8gc-530g-9d3f-e647dbc8219a"
+                        name: "Device 2"
+                        created_ts: 1609459200
+                        tags:
+                          location: "warehouse-b"
+                        most_recent_packet: {}
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/devices/{device_id}:
+    get:
+      tags:
+        - Devices
+      operationId: get-device
+      summary: Get Device
+      description: |
+        Return a specific registered device belonging to your organization.
+        
+        **Required Scope:** `read-devices`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/deviceIdPathParam'
+      responses:
+        '200':
+          description: Device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organizationDevice'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    patch:
+      tags:
+        - Devices
+      operationId: update-device
+      summary: Update Device
+      description: |
+        Update a registered device belonging to your organization.
+        
+        **Required Scope:** `write-devices`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/deviceIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                set_name:
+                  $ref: '#/components/schemas/deviceName'
+                set_tags:
+                  $ref: '#/components/schemas/deviceTags'
+      responses:
+        '200':
+          description: Updated Device
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organizationDevice'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+        
+  /api/org/{org_id}/packets:
+    get:
+      tags:
+        - Packets
+      operationId: retrieve-organization-packets
+      summary: Retrieve Organization Packets
+      description: |
+        Retrieve all packets for your organization.
+        
+        **Required Scope:** `read-packets`
+      
+        ## Overview
+        This endpoint functions like a streaming technology where `Continuation-Token` points to a location in the stream that your consumer has reached. 
+        Packets are ordered based on when they enter the stream, which corresponds to when the packet was received by Hubble Network. 
+      
+        ### Request Parameters
+        **Continuation-Token:** When a `Continuation-Token` value is provided all other query parameters are unused. 
+        The parameter values used when creating the `Continuation-Token` are persisted in the token for re-use across all requests.
+        
+        **start/end:** When no `Continuation-Token` exists, the timestamp query parameters can be used to pick a starting point in the stream.
+        * `start` time (optional) defaults to 7 days ago when not specified. 
+        * `end` time (optional) will page indefinitely when not specified in order to return more data as it becomes available, and otherwise pages until the end has been reached. Granular packet data is available up to 30 days in the past.
+      
+        ### Device Filtering
+        This endpoint supports filtering packets by device ID.
+       
+        **device_id:** When a device ID is provided, only packets from that device will be returned. 
+        However, the `end` will not page indefinitely. If `end` is not provided, the endpoint will page until the current time.
+        Device filtering is provided as a convenience for troubleshooting but should not be used for high-volume data retrieval.
+
+        ### Tag Filtering
+        This endpoint supports filtering packets by device **platform tags**: `_env:production`, `_env:sandbox`. (Custom tags are not supported.)
+        When `filter_tags` is provided, only packets with that tag will be returned.
+        The matching criteria uses AND logic between different tag keys, and OR logic when the same tag key is used more than once. 
+        When a `Continuation-Token` is provided, this parameter is unused.  
+     
+        ### Response Headers
+        * `Continuation-Token` will always be returned if there are more data packets to retrieve. Max page size is 1,000 packets. An empty string is returned to indicate that pagination is finished. 
+        * `Retry-After` is an integer number of seconds to delay before requesting another page (max value 300) and is returned if all data packets have been received.
+
+        ### Response Body
+        * `device.payload` is encoded in Base64 format.
+        * `device.timestamp` is the timestamp when the data packet was detected by Hubble Network.
+        * `location.timestamp` is the timestamp from the scanning device's most recent GPS lock.
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/continuationTokenHeader'
+        - $ref: '#/components/parameters/startQueryParam'
+        - $ref: '#/components/parameters/endQueryParam'
+        - $ref: '#/components/parameters/deviceIdQueryParam'
+        - $ref: '#/components/parameters/filterTagsQueryParam'
+      responses:
+        '200':
+          description: A page of packets
+          headers:
+            'Continuation-Token':
+              $ref: '#/components/parameters/continuationTokenHeader'
+            'Retry-After':
+              $ref: '#/components/parameters/retryAfterHeader'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/packetBatch'
+        '429':
+          description: An error when too many requests have been made to retrieve packets
+          headers:
+            'Continuation-Token':
+              $ref: '#/components/parameters/continuationTokenHeader'
+            'Retry-After':
+              $ref: '#/components/parameters/retryAfterHeader'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/errorResponse'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/webhook/testBatch:
+    post:
+      tags:
+        - Packets
+      operationId: packet-webhook-example
+      summary: Packet Webhook Example
+      description: |
+        This endpoint is an example webhook endpoint that each organization can implement in order to receive packet data.
+        Packet data that has been decrypted for your organization will be forwarded to these webhooks.
+        
+        ### Batching
+        Packets are sent in batches to minimize HTTP overhead from sending packets individually.
+        Batch sizes are configurable per webhook endpoint. 
+        The actual number of packets per request will range between 1 and the configured `max_batch_size`.
+      parameters:
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+        - $ref: '#/components/parameters/webhookSecretHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/packetBatch'
+      responses:
+        '200':
+          description: Message delivered.
+        '500':
+          description: Internal Server Error. Please Retry.
+          
+  /api/org/{org_id}/api_metrics:
+    get:
+      tags:
+        - Platform Metrics
+      operationId: get-api-metrics
+      summary: Get Organization API Metrics
+      description: |
+        Retrieves API request metrics including total requests, success rate, and time interval-based breakdowns.
+        
+        **Required Scope:** `read-platform-metrics`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/metricsDaysBackQueryParam'
+        - $ref: '#/components/parameters/metricsTimeIntervalQueryParam'
+      responses:
+        '200':
+          description: Successfully retrieved API metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                    description: Total number of API requests in the time period
+                  success_rate:
+                    type: number
+                    format: float
+                    description: Success rate of API requests (0-1)
+                  buckets:
+                    type: array
+                    description: Hourly breakdown of metrics
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                          description: Start of the hour in ISO 8601 format
+                        total_requests:
+                          type: integer
+                          description: Number of requests in this hour
+                        success_rate:
+                          type: number
+                          format: float
+                          description: Success rate for this hour (0-1)
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/packet_metrics:
+    get:
+      tags:
+        - Platform Metrics
+      operationId: get-packet-metrics
+      summary: Get Organization Packet Metrics
+      description: |
+        Retrieves packet metrics across a time range providing totals and time interval-based breakdowns.
+        
+        **Required Scope:** `read-platform-metrics`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/metricsDaysBackQueryParam'
+        - $ref: '#/components/parameters/metricsTimeIntervalQueryParam'
+        - $ref: '#/components/parameters/filterTagsQueryParam'
+      responses:
+        '200':
+          description: Successfully retrieved packet metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_packets:
+                    type: integer
+                    description: Total number of packets in the time period
+                  buckets:
+                    type: array
+                    description: A breakdown of packet metrics per time_interval
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          $ref: '#/components/schemas/formattedTimestamp'
+                        total_packets:
+                          type: integer
+                          description: Number of packets in this time_interval
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/webhook_metrics:
+    get:
+      tags:
+        - Platform Metrics
+      operationId: get-webhook-metrics
+      summary: Get Organization Webhook Metrics
+      description: |
+        Retrieves webhook metrics including total requests, success rate, and time interval-based breakdowns for webhook events.
+        
+        **Required Scope:** `read-platform-metrics`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/metricsDaysBackQueryParam'
+        - $ref: '#/components/parameters/metricsTimeIntervalQueryParam'
+      responses:
+        '200':
+          description: Successfully retrieved webhook metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                    description: Total number of webhook requests in the time period
+                  success_rate:
+                    type: number
+                    format: float
+                    description: Success rate of webhook requests (0-1)
+                  buckets:
+                    type: array
+                    description: Hourly breakdown of webhook metrics
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          $ref: '#/components/schemas/formattedTimestamp'
+                        total_requests:
+                          type: integer
+                          description: Number of webhook requests in this hour
+                        success_rate:
+                          type: number
+                          format: float
+                          description: Success rate for this hour (0-1)
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/device_metrics:
+    get:
+      tags:
+        - Platform Metrics
+      operationId: get-device-metrics
+      summary: Get Organization Device Metrics
+      description: |
+        Retrieves metrics for active and total registered devices over time.
+        
+        **Required Scope:** `read-platform-metrics`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/metricsDaysBackQueryParam'
+        - $ref: '#/components/parameters/metricsTimeIntervalQueryParam'
+        - $ref: '#/components/parameters/filterTagsQueryParam'
+      responses:
+        '200':
+          description: Successfully retrieved device metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    description: Hourly breakdown of device metrics
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          $ref: '#/components/schemas/formattedTimestamp'
+                        registered_devices:
+                          type: integer
+                          description: |
+                            The total number of registered devices at the end of this interval.
+                        active_devices:
+                          type: number
+                          description: |
+                            The number of active devices during this interval.
+                            Active devices are those that have successfully transmitted a packet.
+                            Because of the ingestion delays, recent windows metrics may still be accumulating new active devices.
+                        never_active_devices:
+                          type: number
+                          description: |
+                            The number of never active devices during this interval.
+                            Never active devices are devices registered to your organization awaiting first transmission.
+                  total_active_devices:
+                    type: number
+                    description: |
+                      The total number of active devices across the queried time range.
+                      Active devices are those that have successfully transmitted a packet.
+                  total_registered_devices:
+                    type: number
+                    description: |
+                      The total number of devices registered for the organization.
+                  total_never_active_devices:
+                    type: number
+                    description: |
+                      The total number of never active devices across the queried time range.
+                      Never active devices are devices registered to your organization awaiting first transmission.
+                      
+
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/users:
+    get:
+      tags:
+        - Organizations
+      operationId: list-users-in-organization
+      summary: List Organization Users
+      description: |
+        Page through users in an organization.
+        
+        **Required Scope:** `read-users`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/pageNumberQueryParam'
+        - $ref: '#/components/parameters/pageSizeQueryParam'
+      responses:
+        '200':
+          description: A page of users from an organization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/organizationUser'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    post:
+      tags:
+        - Organizations
+      operationId: add-user-to-organization
+      summary: Add User to Organization
+      description: |
+        Add a user to the organization. 
+        This endpoint directly adds the user to the organization and does not create an invitation.
+        
+        **Required Scope:** `write-users`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Email address of the user to add
+                role:
+                  $ref: '#/components/schemas/userRole'
+                  description: Role to assign to the user in the organization
+              example:
+                email: "newuser@example.com"
+                role: "member"
+      responses:
+        '200':
+          description: User added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organizationUser'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/users/{user_id}:
+    patch:
+      tags:
+        - Organizations
+      operationId: update-user-in-organization
+      summary: Update User in Organization
+      description: |
+        Update a user's metadata and/or role in the organization.
+        
+        **Required Scope:** `write-users`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/userIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Request body for updating a user in an organization
+              properties:
+                set_first_name:
+                  type: string
+                  maxLength: 250
+                  description: Update the user's first name
+                set_last_name:
+                  type: string
+                  maxLength: 250
+                  description: Update the user's last name
+                set_role:
+                  $ref: '#/components/schemas/userRole'
+                  description: Update the user's role in the organization
+              example:
+                set_first_name: "John"
+                set_last_name: "Doe"
+                set_role: "admin"
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/organizationUser'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    delete:
+      tags:
+        - Organizations
+      operationId: delete-user-from-organization
+      summary: Delete User from Organization
+      description: |
+        Remove a user from the organization.
+        
+        **Required Scope:** `write-users`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/userIdPathParam'
+      responses:
+        '200':
+          description: User successfully deleted from organization
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Empty response object
+                example: {}
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/invitations:
+    get:
+      tags:
+        - Organizations
+      operationId: list-pending-invites
+      summary: List Pending Invites
+      description: |
+        Page through pending invites to an organization.
+        
+        **Required Scope:** `read-invitations`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/pageNumberQueryParam'
+        - $ref: '#/components/parameters/pageSizeQueryParam'
+      responses:
+        '200':
+          description: A page of pending invites from an organization
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/invitation'
+                  total_invites:
+                    type: integer
+                    description: Total number of pending invites
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    post:
+      tags:
+        - Organizations
+      operationId: invite-user-to-organization
+      summary: Invite User to Organization
+      description: |
+        Invite a user to join the organization.
+        
+        **Required Scope:** `write-invitations`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invitee_email
+                - role
+              properties:
+                invitee_email:
+                  type: string
+                  format: email
+                  description: Email address of the user to invite
+                role:
+                  $ref: '#/components/schemas/userRole'
+                  description: Role to assign to the invited user
+      responses:
+        '200':
+          description: Invitation successfully created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/invitation'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    delete:
+      tags:
+        - Organizations
+      operationId: delete-invitation
+      summary: Delete Invitation
+      description: |
+        Revoke a pending invitation to the organization.
+        
+        **Required Scope:** `write-invitations`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/contentTypeJsonHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invitee_email
+              properties:
+                invitee_email:
+                  type: string
+                  format: email
+                  description: Email address of the user whose invitation to revoke
+      responses:
+        '200':
+          description: Invitation successfully revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                example: {}
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '401':
+          $ref: '#/components/responses/ErrorUnauthorized'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+
+  /api/org/{org_id}/webhooks:
+    post:
+      tags:
+        - Packet Webhooks
+      operationId: create-webhook-endpoint
+      summary: Create a Webhook Endpoint
+      description: |
+        Register an endpoint that can receive webhook events for packet data.
+        
+        **Required Scope:** `write-webhooks`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  $ref: '#/components/schemas/webhookURL'
+                max_batch_size:
+                  $ref: '#/components/schemas/webhookMaxBatchSize'
+                name:
+                  $ref: '#/components/schemas/webhookName'
+      responses:
+        '200':
+          description: A registered webhook endpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webhookWithSecret'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    get:
+      tags:
+        - Packet Webhooks
+      operationId: list-registered-webhooks
+      summary: List Registered Webhooks
+      description: |
+        Retrieve a list of registered webhooks.
+        
+        **Required Scope:** `read-webhooks`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: A list of registered webhook endpoints
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/basicWebhook'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/webhooks/{webhook_id}:
+    patch:
+      tags:
+        - Packet Webhooks
+      operationId: update-webhook-endpoint
+      summary: Update a Webhook Endpoint
+      description: |
+        Update certain fields of a webhook endpoint.
+        
+        **Required Scope:** `write-webhooks`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/webhookIdPathParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                set_name:
+                  $ref: '#/components/schemas/webhookName'
+                set_max_batch_size:
+                  $ref: '#/components/schemas/webhookMaxBatchSize'
+                set_url:
+                  $ref: '#/components/schemas/webhookURL'
+      responses:
+        '200':
+          description: The updated webhook endpoint
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/basicWebhook'
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+    delete:
+      tags:
+        - Packet Webhooks
+      operationId: delete-webhook-endpoint
+      summary: Delete a Webhook Endpoint
+      description: |
+        Delete a webhook endpoint.
+        
+        **Required Scope:** `write-webhooks`
+        Delete a webhook endpoint so that it will stop receiving traffic.
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - $ref: '#/components/parameters/webhookIdPathParam'
+      responses:
+        '200':
+          description: The webhook has been deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                description: an empty object for now
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+
+  /api/org/{org_id}/billing/invoices:
+    get:
+      tags:
+        - Billing
+      operationId: get-recent-invoices
+      summary: Get Recent Invoices
+      description: |
+        Retrieve the most recent invoices for your organization.
+        
+        **Required Scope:** `read-billing-invoices`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: A page of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        invoice_id:
+                          type: string
+                          description: the primary id for the invoice
+                        issue_timestamp:
+                          $ref: '#/components/schemas/utcTimestampNumber'
+                        due_timestamp:
+                          $ref: '#/components/schemas/utcTimestampNumber'
+                        status:
+                          type: string
+                          enum:
+                            - DRAFT
+                            - PENDING
+                            - COMPLETED
+                          description: |
+                            A status for the invoice. 
+                            The invoice starts as a DRAFT and then transitions to PENDING when it is ready to be paid.
+                            A fully paid invoice is then COMPLETED.
+                        total:
+                          type: number
+                          format: float
+                          description: |
+                            The total balance amount on the invoice. The value is based on the organization's currency.
+                        remaining_balance:
+                          type: number
+                          format: float
+                          description: |
+                            The remaining balance due on the invoice. The value is based on the organization's currency.
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/billing/invoices/{invoice_id}/pdf:
+    get:
+      tags:
+        - Billing
+      operationId: get-invoice-pdf
+      summary: Get Invoice PDF
+      description: |
+        Retrieve an invoice PDF.
+        
+        **Required Scope:** `read-billing-invoices`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+        - name: invoice_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The primary key for an invoice
+      responses:
+        '200':
+          description: A PDF document for an invoice
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+                description: the PDF contents
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+  /api/org/{org_id}/billing/usage:
+    get:
+      tags:
+        - Billing
+      operationId: get-billing-usage
+      summary: Get Billing Usage
+      description: |
+        Retrieve the most recent billing usage for your organization.
+
+        **Required Scope:** `read-billing-usage`
+      parameters:
+        - $ref: '#/components/parameters/orgIdPathParam'
+      responses:
+        '200':
+          description: A page of usage
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  usage:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        usage_timestamp:
+                          $ref: '#/components/schemas/formattedTimestamp'
+                        usage_type:
+                          type: string
+                          enum:
+                            - Daily Active Devices
+                            - Monthly Active Devices
+                          description: |
+                            The type of usage recorded.
+                        usage_value:
+                          type: number
+                          format: integer
+                          description: |
+                            The usage value for this type and timestamp.
+        '400':
+          $ref: '#/components/responses/ErrorBadRequest'
+        '500':
+          $ref: '#/components/responses/ErrorInternalServer'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    orgIdPathParam:
+      name: org_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/orgId'
+      description: Your organization ID
+
+    deviceIdPathParam:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/deviceId'
+
+    webhookIdPathParam:
+      name: webhook_id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/webhookId'
+
+    userIdPathParam:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: The ID of the user
+
+    limitQueryParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        maximum: 1000
+        minimum: 10
+        default: 250
+      description: A limit for the page size of devices
+
+    filterCreatedTSQueryParam:
+      name: filter_created_ts
+      in: query
+      required: false
+      schema:
+        type: string
+      description: |
+        Filter devices by creation timestamp (e.g., filter_created_ts=between:1000:2000)
+        Timestamps are in seconds since the Unix epoch.
+        The only supported filtering operator currently is `between`. 
+
+    filterMostRecentPacketTSQueryParam:
+      name: filter_most_recent_packet_ts
+      in: query
+      required: false
+      schema:
+        type: string
+      description: | 
+        Filter devices by most recent packet timestamp (e.g., filter_most_recent_packet_ts=between:1000:2000)
+        Timestamps are in seconds since the Unix epoch.
+        The most recent packet value is only updated periodically.
+        The only supported filtering operator currently is `between`. 
+
+    sortFieldQueryParam:
+      name: sort_field
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [created_ts, most_recent_packet_ts]
+      description: Field to sort devices by
+
+    sortAscendingQueryParam:
+      name: sort_ascending
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: true
+      description: Sort order (true for ascending, false for descending)
+
+    continuationTokenHeader:
+      name: Continuation-Token
+      in: header
+      required: false
+      schema:
+        type: string
+      description: A token to indicate how to continue paging
+
+    contentTypeJsonHeader:
+      name: Content-Type
+      in: header
+      schema:
+        type: string
+      description: An indication that the payload is JSON
+      example: application/json
+
+    webhookSecretHeader:
+      name: HTTP-X-HUBBLE-TOKEN
+      in: header
+      required: true
+      schema:
+        $ref: '#/components/schemas/webhookSecret'
+      description: |
+        A confidential, unique string generated for your webhook endpoint to validate that the request came from Hubble.
+
+    startQueryParam:
+      name: start
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/utcTimestampInteger'
+      description: |
+        UTC timestamp (in seconds) indicating when to start retrieving packets. 
+        This timestamp corresponds to when the packet was received by the network.
+        If omitted, defaults to 7 days before the current UTC time.
+
+    endQueryParam:
+      name: end
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/utcTimestampInteger'
+      description: |
+        UTC timestamp (in seconds) indicating when to end retrieving packets.
+        This timestamp corresponds to when the packet was received by the network.
+        If omitted, defaults to empty (meaning the pagination will continue indefinitely).
+        If specified, pagination will continue until all packets received prior to the timestamp have been returned.
+
+    deviceIdQueryParam:
+      name: device_id
+      in: query
+      required: false
+      schema:
+        $ref: '#/components/schemas/deviceId'
+      description: |
+        Filter packets to a specific device
+
+    retryAfterHeader:
+      name: Retry-After
+      in: header
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 300
+      description: |
+        The number of seconds to wait to attempt a retry.
+        When attached to a 200, this is a suggestion because the most recent data has been retrieved already.
+        When attached to a 429, this delay is a recommendation to reduce repeat 429s.
+
+    pageNumberQueryParam:
+      name: page_number
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: The page number of items to return
+
+    pageSizeQueryParam:
+      name: page_size
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 5
+        maximum: 100
+        default: 10
+      description: The maximum number of items to return in a single request
+
+    metricsDaysBackQueryParam:
+      name: days
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 365
+        default: 1
+      description: |
+        The number of days of metrics to include in the request.
+        
+        The maximum value is further restricted when small `time_interval` values are used.
+        The maximum number of total metric buckets is 365.
+
+    metricsTimeIntervalQueryParam:
+      name: time_interval
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - hour
+          - day
+          - month
+      description: |
+        The time interval for the metric buckets.
+        If not provided, a default value is selected based on the `days` parameter:
+        
+        | days        | time_interval |
+        | ----------- | ------------- |
+        | [1 => 1)    | hour          |
+        | [2 => 31]   | day           |
+        | [32 => 365] | month         |
+        
+        **Partial buckets:** The most recent bucket of metrics is a "partial" bucket depending on the interval - partial because it doesn't span a full time_interval yet. 
+        (e.g. 10:00pm -> 10:36pm for `hour`, June 3rd 12:00am -> June 3rd 10:36pm for `day`, June 1st 12:00am -> June 3rd 10:36pm for `month`).
+        The older buckets are always "complete" buckets.
+        (e.g. 09:00pm -> 10:00pm for `hour`, June 2nd 12:00am -> June 3rd 12:00am for `day`, May 1st 12:00am -> June 1st 12:00am for `month`).
+        
+        **Edge cases:** If `days` is not large enough to include a full `month` bucket, days is increased in the backend. 
+        For example, querying days=90 with a `month` time_interval on June 13th, 2025 will return "complete" March, April, and May buckets and a "partial" June bucket.
+        Similarly, when querying for days=7 with a `day` time_interval on June 13th, 2025 at 6:00am will return "complete" June 6th, 7th, 8th, 9th, 10th, 11th, and 12th buckets and a "partial" June 13th bucket.
+
+    filterTagsQueryParam:
+      name: filter_tags
+      in: query
+      required: false
+      schema:
+        type: array
+        items:
+          type: string
+          description: | 
+            A tag to match against. For example: _env:production.
+      description: |
+        A set of device **platform tags** specifying which packets to include.
+        Only platform tags are queryable: `_env:production`, `_env:sandbox`.
+        The query param can be used multiple times to form a list of tags.
+        Packet matching criteria uses AND logic when different tag keys are used in a list of tags, and OR logic when the same tag key is used more than once.
+
+  schemas:
+    orgId:
+      type: string
+      format: uuid
+      description: The ID for an organization
+
+    apiKey:
+      type: string
+      description: An API key
+
+    apiKeyName:
+      type: string
+      description: A name for an API Key
+      maxLength: 250
+
+    apiKeyId:
+      type: string
+      description: An ID for an API key
+
+    apiKeyExpiration:
+      type: integer
+      format: int64
+      description: |
+        An UTC second-precision timestamp formatted as an integer.
+        Can be set to 0 to indicate that there is no expiration.
+
+    deviceName:
+      type: string
+      description: Assigned name for the device
+      maxLength: 250
+
+    deviceId:
+      type: string
+      description: Primary UUID identifier for a registered device
+
+    deviceTags:
+      type: object
+      additionalProperties:
+        type: string
+        enum: [_env: production, _env: sandbox]
+      description: |
+        Tags are user-defined key/value pairs that can be attributed to a device. 
+        A device may have up to 10 tags.
+        **Custom tags:** create your own tags with `key` length up to 32 characters and `value` length up to 128 characters.
+        **Platform tags:** use Hubble-defined tags to organize devices.
+        - `_env` tag: `production` indicates if a device belongs to the live environment, and `sandbox` for the test environment. A device will always have an `_env` tag assigned.
+
+    utcTimestampNumber:
+      type: number
+      format: double
+      description: An UTC second-precision timestamp formatted as a floating point number
+
+    utcTimestampInteger:
+      type: integer
+      format: int64
+      description: An UTC second-precision timestamp formatted as an integer
+
+    formattedTimestamp:
+      type: string
+      format: date-time
+      description: | 
+        Start of the bucket in ISO 8601 format.
+        For example: `2025-04-25T14:01:54Z`. 
+
+    webhookId:
+      type: string
+      description: An identifier for a webhook
+
+    webhookName:
+      type: string
+      description: A name/description for a webhook
+      maxLength: 250
+
+    webhookSecret:
+      type: string
+      description: | 
+        A confidential, unique string generated for your webhook endpoint to validate that the request came from Hubble.
+        Hubble will send this token in the HTTP header `HTTP-X-HUBBLE-TOKEN` when making HTTPS requests to your endpoint.
+
+    webhookURL:
+      type: string
+      description: A webhook url
+      maxLength: 2000
+
+    webhookMaxBatchSize:
+      type: integer
+      description: The maximum number of packets that Hubble will batch into one webhook request
+      default: 100
+      minimum: 10
+      maximum: 1000
+
+    legacyWebhook:
+      type: object
+      properties:
+        url:
+          $ref: '#/components/schemas/webhookURL'
+        max_batch_size:
+          $ref: '#/components/schemas/webhookMaxBatchSize'
+
+    basicWebhook:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/legacyWebhook'
+        - type: object
+          properties:
+            webhook_id:
+              $ref: '#/components/schemas/webhookId'
+            org_id:
+              $ref: '#/components/schemas/orgId'
+            name:
+              $ref: '#/components/schemas/webhookName'
+
+    webhookWithSecret:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/basicWebhook'
+        - type: object
+          properties:
+            secret:
+              $ref: '#/components/schemas/webhookSecret'
+
+    userRole:
+      type: string
+      enum: [admin, member]
+      description: The role a user is assigned within an organization
+
+    organizationUser:
+      type: object
+      description: A user within an organization
+      properties:
+        user_id:
+          type: string
+          description: an id for the user
+        email:
+          type: string
+          format: email
+          description: the user's email address
+        email_confirmed:
+          type: boolean
+          description: whether the user's email has been confirmed
+        first_name:
+          type: string
+          description: the user's first name
+        last_name:
+          type: string
+          description: the user's last name
+        created_at:
+          $ref: '#/components/schemas/utcTimestampInteger'
+        last_active_at:
+          $ref: '#/components/schemas/utcTimestampInteger'
+        role:
+          $ref: '#/components/schemas/userRole'
+
+    invitation:
+      type: object
+      description: An invitation to join an organization
+      required:
+        - invitee_email
+        - role
+        - created_at
+        - expires_at
+      properties:
+        invitee_email:
+          type: string
+          format: email
+          description: Email address of the invited user
+        inviter_email:
+          type: string
+          format: email
+          description: Email address of the user who sent the invitation
+        created_at:
+          $ref: '#/components/schemas/utcTimestampInteger'
+          description: Timestamp when the invitation was created
+        expires_at:
+          $ref: '#/components/schemas/utcTimestampInteger'
+          description: Timestamp when the invitation expires
+        role:
+          $ref: '#/components/schemas/userRole'
+          description: Role that will be assigned to the invited user
+
+    organizationName:
+      type: string
+      description: The name of the organization
+
+    authScope:
+      type: string
+      enum:
+        - read-api-keys
+        - write-api-keys
+        - read-users
+        - write-users
+        - read-organization-metadata
+        - write-organization-metadata
+        - read-devices
+        - write-devices
+        - read-invitations
+        - write-invitations
+        - read-packets
+        - read-platform-metrics
+        - read-billing-usage
+        - read-billing-invoices
+        - read-webhooks
+        - write-webhooks
+      description: Authorization scope for API key permissions
+
+    apiKeyItem:
+      type: object
+      description: An API Token used to authenticate with the Hubble Platform
+      properties:
+        key_id:
+          $ref: '#/components/schemas/apiKeyId'
+        key_name:
+          $ref: '#/components/schemas/apiKeyId'
+        created_at:
+          $ref: '#/components/schemas/utcTimestampInteger'
+        expires_at_seconds:
+          $ref: '#/components/schemas/apiKeyExpiration'
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/authScope'
+          description: List of authorization scopes assigned to this API key
+
+    address:
+      type: object
+      properties:
+        street_address:
+          type: string
+          description: The first line of a street address
+          maxLength: 250
+        street_address_line_two:
+          type: string
+          description: The optional second line of a street address
+          maxLength: 250
+        city:
+          type: string
+          description: A city that the address relates to
+          maxLength: 100
+        state:
+          type: string
+          description: A state that the address relates to
+          maxLength: 100
+        country:
+          type: number
+          description: A country code defined by [ISO-3166](https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes).
+
+    timezone:
+      type: string
+      description: A timezone string defined in the [IANA Time Zone](https://www.iana.org/time-zones) database.
+
+    contactInfo:
+      type: object
+      properties:
+        phoneNumber:
+          type: string
+          description: A phone number matching the [E.164](https://en.wikipedia.org/wiki/E.164) specification
+        email:
+          type: string
+          description: An email address
+
+    organizationDevice:
+      type: object
+      required: [name, id, created_ts, tags]
+      properties:
+        name:
+          $ref: '#/components/schemas/deviceName'
+        id:
+          $ref: '#/components/schemas/deviceId'
+        created_ts:
+          $ref: '#/components/schemas/utcTimestampInteger'
+        tags:
+          $ref: '#/components/schemas/deviceTags'
+        most_recent_packet:
+          type: object
+          description: |
+            Most recent packet metadata for different network types.
+            The most recent packet value is only updated periodically.
+          properties:
+            satellite:
+              type: object
+              nullable: true
+              properties:
+                timestamp:
+                  $ref: '#/components/schemas/utcTimestampNumber'
+                  description: Unix timestamp of a recent satellite packet
+                location:
+                  $ref: '#/components/schemas/latLongLocation'
+                  description: Location data from a recent satellite packet
+            terrestrial:
+              type: object
+              nullable: true
+              properties:
+                timestamp:
+                  $ref: '#/components/schemas/utcTimestampNumber'
+                  description: Unix timestamp of a recent terrestrial packet
+                location:
+                  $ref: '#/components/schemas/latLongLocation'
+                  description: Location data from a recent terrestrial packet
+
+
+    organization:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/organizationName'
+        org_id:
+          $ref: '#/components/schemas/orgId'
+        contact_info:
+          $ref: '#/components/schemas/contactInfo'
+        address:
+          $ref: '#/components/schemas/address'
+        timezone:
+          $ref: '#/components/schemas/timezone'
+
+    location:
+      type: object
+      required:
+        - latitude
+        - longitude
+        - altitude
+        - timestamp
+      properties:
+        latitude:
+          type: number
+          description: Latitude in Decimal Degrees DDD.DDDDD°
+        longitude:
+          type: number
+          description: Longitude in Decimal Degrees DDD.DDDDD°
+        altitude:
+          type: number
+          description: Altitude in meters for the provided gps coordinates
+        horizontal_accuracy:
+          type: number
+          description: Horizontal accuracy in meters for the provided gps coordinates
+        vertical_accuracy:
+          type: number
+          description: Vertical accuracy in meters for the provided gps coordinates
+        timestamp:
+          $ref: '#/components/schemas/utcTimestampNumber'
+
+    latLongLocation:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          description: Latitude in Decimal Degrees DDD.DDDDD°
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          description: Longitude in Decimal Degrees DDD.DDDDD°
+          format: double
+          minimum: -180
+          maximum: 180
+
+    advertisement:
+      description: Advertisement packet(s) associated with the provided location
+      type: object
+      required:
+        - payload
+        - rssi
+        - timestamp
+      properties:
+        payload:
+          type: string
+          description: Raw advertisement packet in Base64 format
+        rssi:
+          type: number
+          description: Signal strength in dBm
+        timestamp:
+          $ref: '#/components/schemas/utcTimestampNumber'
+
+    packet:
+      type: object
+      properties:
+        location:
+          $ref: '#/components/schemas/location'
+        device:
+          type: object
+          required:
+            - id
+            - payload
+            - timestamp
+          properties:
+            id:
+              $ref: '#/components/schemas/deviceId'
+            name:
+              $ref: '#/components/schemas/deviceName'
+            tags:
+              $ref: '#/components/schemas/deviceTags'
+            payload:
+              type: string
+              description: A packet's decrypted payload in Base64 format
+            rssi:
+              type: number
+            timestamp:
+              $ref: '#/components/schemas/utcTimestampNumber'
+            counter:
+              type: number
+              description: |
+                The time-based counter associated with this packet.
+            sequence_number:
+              type: number
+              description: | 
+                The sequence number of this packet
+        network_type:
+          type: string
+          enum: [TERRESTRIAL, SATELLITE]
+
+    packetBatch:
+      type: object
+      properties:
+        packets:
+          type: array
+          items:
+            $ref: '#/components/schemas/packet'
+
+    errorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          description: The HTTP status code
+        description:
+          type: string
+          description: |
+            A description for the error.
+            For user errors, we attempt to be as descriptive as possible to help with diagnosing the issue.
+            For internal errors, the error description is only indicates that a retry should occur but we log the full error so that we can diagnose it.
+            Error descriptions can change over time and should not be programmed against.
+        name:
+          type: string
+          enum:
+            - Bad Request
+            - Unauthorized
+            - Not Found
+            - Too Many Requests
+            - Internal Server Error
+          description: |
+            `name` is a short name for the error.
+
+  responses:
+    ErrorBadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            code: 400
+            description: "The request could not be understood by the server due to malformed syntax."
+            name: "Bad Request"
+    ErrorInternalServer:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            code: 500
+            description: "An unknown error has occurred."
+            name: "Unknown"
+    ErrorUnauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/errorResponse'
+          example:
+            code: 401
+            description: "Authentication is required and has failed or has not been provided."
+            name: "Unauthorized"
