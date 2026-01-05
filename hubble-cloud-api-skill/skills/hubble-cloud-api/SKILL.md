@@ -174,13 +174,18 @@ The Hubble Cloud API provides 40+ endpoints organized into 9 categories. For com
 
 ### Device Management
 
-- `POST /api/v2/org/{org_id}/devices` - Register new devices with encryption keys
+- `POST /api/v2/org/{org_id}/devices` - Batch register devices (up to 1,000 per request)
 - `GET /api/org/{org_id}/devices` - List devices with filtering and sorting
 - `GET /api/org/{org_id}/devices/{device_id}` - Retrieve specific device details
 - `PATCH /api/org/{org_id}/devices/{device_id}` - Update device metadata and tags
 - `PATCH /api/org/{org_id}/devices` - Batch update up to 1,000 devices
+- `DELETE /api/org/{org_id}/devices` - Batch delete up to 1,000 devices
 
-**Key features**: Device names, custom tags, platform tags, timestamp filtering
+**Key features**:
+- **Batch operations**: Create, update, and delete up to 1,000 devices per API call
+- **Auto-generated credentials**: API generates device IDs and encryption keys
+- **Encryption options**: AES-256-CTR, AES-128-CTR, or NONE
+- **Device management**: Names, custom tags, platform tags, timestamp filtering
 
 ### Packet Retrieval
 
@@ -352,31 +357,84 @@ For detailed step-by-step guides, see [WORKFLOWS.md](./WORKFLOWS.md).
 
 For complete, runnable examples, see [EXAMPLES.md](./EXAMPLES.md).
 
-### Quick Python Example: Register Device
+### Quick Python Example: Batch Register Devices
 
 ```python
 import requests
-import base64
-import os
 
-def register_device(api_token, org_id, device_id, device_name):
-    # Generate device key (32 bytes)
-    device_key = os.urandom(32)
-    device_key_b64 = base64.b64encode(device_key).decode('utf-8')
+def batch_register_devices(api_token, org_id, n_devices=100, encryption="AES-128-CTR"):
+    """
+    Register multiple devices in a single API call.
 
+    Args:
+        api_token: Hubble API bearer token
+        org_id: Organization UUID
+        n_devices: Number of devices to create (1-1000)
+        encryption: Encryption type (AES-256-CTR, AES-128-CTR, or NONE)
+
+    Returns:
+        List of device objects with generated credentials
+    """
     url = f"https://api.hubble.com/api/v2/org/{org_id}/devices"
     headers = {
         "Authorization": f"Bearer {api_token}",
         "Content-Type": "application/json"
     }
     payload = {
-        "name": device_name,
-        "dev_eui": device_id,
-        "device_key": device_key_b64
+        "n_devices": n_devices,
+        "encryption": encryption
     }
 
     response = requests.post(url, json=payload, headers=headers)
-    return response.json() if response.status_code == 201 else response.text
+
+    if response.status_code == 200:
+        data = response.json()
+        devices = data.get("devices", [])
+        print(f"Created {len(devices)} devices")
+        return devices
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        return []
+
+# Example usage
+devices = batch_register_devices("your-api-token", "your-org-id", n_devices=10)
+for device in devices:
+    print(f"Device ID: {device['device_id']}, Key: {device['key']}")
+```
+
+### Quick Python Example: Batch Delete Devices
+
+```python
+import requests
+
+def batch_delete_devices(api_token, org_id, device_ids):
+    """
+    Delete multiple devices in a single API call.
+
+    Args:
+        api_token: Hubble API bearer token
+        org_id: Organization UUID
+        device_ids: List of device UUIDs to delete (up to 1000)
+
+    Returns:
+        Dictionary with deletion results
+    """
+    url = f"https://api.hubble.com/api/org/{org_id}/devices"
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json"
+    }
+    payload = {"device_ids": device_ids}
+
+    response = requests.delete(url, json=payload, headers=headers)
+
+    if response.status_code in [200, 204]:
+        result = response.json() if response.text else {"deleted": len(device_ids)}
+        print(f"Deleted {result.get('deleted', len(device_ids))} devices")
+        return result
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+        return {"deleted": 0, "failed": len(device_ids)}
 ```
 
 ### Quick curl Example: List Devices
