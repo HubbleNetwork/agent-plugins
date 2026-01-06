@@ -1,6 +1,6 @@
 ---
 name: hubble-cloud-api
-description: Integrate with Hubble Network Platform API for device management, packet retrieval with streaming, webhook configuration, metrics tracking, user management, and billing. Use when working with Hubble IoT devices, retrieving packet data, setting up webhooks, or managing deployments on Hubble Network.
+description: This skill should be used when the user needs to integrate with Hubble Network Platform API for IoT device management, packet data retrieval, webhook configuration, metrics tracking, user management, or billing. Triggers include 'Hubble API', 'Hubble devices', 'Hubble packets', 'register IoT devices', 'configure webhooks for Hubble', 'Hubble Network integration', 'stream packet data'.
 ---
 
 # Hubble Cloud API Integration
