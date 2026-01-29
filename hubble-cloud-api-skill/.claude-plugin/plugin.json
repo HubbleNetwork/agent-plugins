@@ -8,7 +8,7 @@
     "url": "https://hubble.com"
   },
   "homepage": "https://docs.hubble.com",
-  "repository": "https://github.com/hubble-network/claude-hubble-cloud-api-skill",
+  "repository": "https://github.com/HubbleNetwork/claude-hubble-cloud-api-skill",
   "license": "MIT",
   "keywords": [
     "hubble",

@@ -23,14 +23,14 @@ This skill enables Claude to interact with the Hubble Network Platform API for m
 ### Via GitHub (Recommended)
 
 ```bash
-claude plugin install github:hubble-network/claude-hubble-cloud-api-skill
+claude plugin install github:HubbleNetwork/claude-hubble-cloud-api-skill
 ```
 
 ### Local Development
 
 ```bash
 # Clone repository
-git clone https://github.com/hubble-network/claude-hubble-cloud-api-skill.git
+git clone https://github.com/HubbleNetwork/claude-hubble-cloud-api-skill.git
 
 # Install locally
 claude plugin install file://$(pwd)/claude-hubble-cloud-api-skill
@@ -147,7 +147,7 @@ Store securely using:
 ## Support
 
 - **Documentation**: [docs.hubble.com](https://docs.hubble.com)
-- **GitHub Issues**: [github.com/hubble-network/claude-hubble-cloud-api-skill/issues](https://github.com/hubble-network/claude-hubble-cloud-api-skill/issues)
+- **GitHub Issues**: [github.com/HubbleNetwork/claude-hubble-cloud-api-skill/issues](https://github.com/HubbleNetwork/claude-hubble-cloud-api-skill/issues)
 - **Support Email**: support@hubble.com
 - **Developer Portal**: [hubble.com/developers](https://hubble.com/developers)
 

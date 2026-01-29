@@ -645,7 +645,7 @@ If issues persist after trying these solutions:
    - Email: support@hubble.com
    - Include: Request ID, timestamp, API endpoint, error message
 
-4. **GitHub Issues**: [github.com/hubble-network/claude-hubble-cloud-api-skill/issues](https://github.com/hubble-network/claude-hubble-cloud-api-skill/issues)
+4. **GitHub Issues**: [github.com/HubbleNetwork/claude-hubble-cloud-api-skill/issues](https://github.com/HubbleNetwork/claude-hubble-cloud-api-skill/issues)
 
 5. **Documentation**: [docs.hubble.com](https://docs.hubble.com)
 

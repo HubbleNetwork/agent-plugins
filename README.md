@@ -29,7 +29,7 @@ Complete Claude Skill for Hubble Network Cloud API integration.
 Add this repository as a marketplace source to browse and install plugins:
 
 ```bash
-claude plugin marketplace add https://github.com/hubble-network/agent-plugins
+claude plugin marketplace add https://github.com/HubbleNetwork/agent-plugins
 ```
 
 Once added, you can browse available plugins:
@@ -45,14 +45,14 @@ Install plugins directly from this repository:
 #### Install via GitHub
 
 ```bash
-claude plugin install github:hubble-network/agent-plugins/hubble-cloud-api-skill
+claude plugin install github:HubbleNetwork/agent-plugins/hubble-cloud-api-skill
 ```
 
 #### Install from Local Clone
 
 ```bash
 # Clone the repository
-git clone https://github.com/hubble-network/agent-plugins.git
+git clone https://github.com/HubbleNetwork/agent-plugins.git
 cd agent-plugins
 
 # Install a specific plugin
@@ -179,7 +179,7 @@ To contribute a new plugin:
 - **Plugin Guide**: [code.claude.com/docs/en/plugins](https://code.claude.com/docs/en/plugins)
 
 ### Getting Help
-- **GitHub Issues**: [github.com/hubble-network/agent-plugins/issues](https://github.com/hubble-network/agent-plugins/issues)
+- **GitHub Issues**: [github.com/HubbleNetwork/agent-plugins/issues](https://github.com/HubbleNetwork/agent-plugins/issues)
 - **Support Email**: support@hubble.com
 - **Developer Portal**: [hubble.com/developers](https://hubble.com/developers)
 
